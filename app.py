@@ -210,7 +210,7 @@ if st.button(btn_label):
                 for text in stream.text_stream:
                     full_output += text
                     output_placeholder.markdown(
-                        f'<div class="output-box">{full_output}</div>',
+                        f'<div class="output-box">{full_output.replace(chr(10), "<br>")}</div>',
                         unsafe_allow_html=True,
                     )
 
