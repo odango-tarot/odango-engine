@@ -162,7 +162,7 @@ mode = st.radio("", options=["generate", "rewrite"],
     horizontal=True, label_visibility="collapsed", key="mode")
 
 st.markdown('<div class="section-label">✦ 目標文字数</div>', unsafe_allow_html=True)
-char_preset = st.select_slider("", options=[500, 1000, 2000, 3000, 5000, 8000, 10000], value=8000,
+char_preset = st.select_slider("", options=[500, 1000, 2000, 3000, 5000, 8000, 10000], value=8000, label_visibility="collapsed")
 char_count = st.number_input("カスタム文字数（スライダーより優先）", min_value=500, max_value=15000, value=char_preset, step=500)
 
 st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
