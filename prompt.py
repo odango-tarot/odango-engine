@@ -114,3 +114,50 @@ def build_user_message(
 """
 
     return message
+
+def get_mashup_system_prompt(method_key1: str, method_key2: str) -> str:
+    method_label1 = FORTUNE_METHODS.get(method_key1, "占い")
+    method_label2 = FORTUNE_METHODS.get(method_key2, "占い")
+    base = get_system_prompt(method_key1)
+    mashup_instruction = f"""
+# マッシュアップ追加指示
+{method_label1}に加えて{method_label2}の出目も組み合わせて鑑定します。
+- 2つを別々に解説せず、自然に絡み合わせて1本にまとめる
+- どちらかが「補強」、もう一方が「具体的メッセージ」という役割分担を自然に作る
+"""
+    return base + mashup_instruction
+
+
+def build_mashup_user_message(
+    client_name: str,
+    consultation: str,
+    method_label1: str,
+    method_label2: str,
+    raw_data1: str,
+    raw_data2: str,
+    memo: str,
+    char_count: int,
+) -> str:
+    message = f"""# タスク
+2つの占術の出目を統合した鑑定文を生成してください。
+
+# クライアント情報
+- お名前：{client_name}さん
+- ご相談内容：{consultation if consultation else "（記載なし）"}
+
+# 占術1：{method_label1}の出目
+{raw_data1}
+
+# 占術2：{method_label2}の出目
+{raw_data2}
+"""
+    if memo:
+        message += f"\n# 補足メモ\n{memo}\n"
+
+    message += f"""
+# 出力指定
+- 目標文字数：約{char_count}字
+- 2つの占術を自然に統合した1本の鑑定文にしてください
+- クライアント名「{client_name}」を正しく使用してください
+"""
+    return message
