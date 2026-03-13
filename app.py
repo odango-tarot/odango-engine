@@ -235,6 +235,7 @@ if st.button(btn_label):
                 user_message = build_user_message(
                     client_name=client_name,
                     consultation=consultation,
+                    consultation_text=consultation_text,
                     method_label=FORTUNE_METHODS[method_key],
                     raw_data=raw_data,
                     memo=memo,
