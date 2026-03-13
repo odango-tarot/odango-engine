@@ -57,7 +57,7 @@ def fetch_natal_chart(year, month, day, hour, minute, lat, lon, tzone):
         "year": year, "month": month, "date": day,
         "hours": hour, "minutes": minute, "seconds": 0,
         "latitude": lat, "longitude": lon, "timezone": tzone,
-        "config": {"observation_point": "topocentric", "ayanamsha": "lahiri"}
+        "config": {"observation_point": "topocentric", "ayanamsha": "tropical"}
     }
     try:
         res = requests.post(url, json=payload, headers=headers, timeout=10)
