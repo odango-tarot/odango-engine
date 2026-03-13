@@ -11,7 +11,7 @@ ASTRO_SIGNS = ["おひつじ座", "おうし座", "ふたご座", "かに座", "
 ASTRO_HOUSES = ["1ハウス", "2ハウス", "3ハウス", "4ハウス", "5ハウス", "6ハウス", "7ハウス", "8ハウス", "9ハウス", "10ハウス", "11ハウス", "12ハウス"]
 
 # ─────────────────────────────────────────────
-# ネイタルチャート自動計算
+# ネイタルチャート自動計算（デバッグ版）
 # ─────────────────────────────────────────────
 def fetch_natal_chart(year, month, day, hour, minute, lat, lon, tzone):
     api_key = st.secrets.get("ASTROLOGY_API_KEY", "")
@@ -30,26 +30,8 @@ def fetch_natal_chart(year, month, day, hour, minute, lat, lon, tzone):
         res = requests.post(url, json=payload, headers=headers, timeout=10)
         res.raise_for_status()
         data = res.json()
-        planets = data.get("output", [])
-        lines = []
-        sign_names = {
-            1:"おひつじ座", 2:"おうし座", 3:"ふたご座", 4:"かに座",
-            5:"しし座", 6:"おとめ座", 7:"てんびん座", 8:"さそり座",
-            9:"いて座", 10:"やぎ座", 11:"みずがめ座", 12:"うお座"
-        }
-        planet_names = {
-            "Sun":"太陽", "Moon":"月", "Mercury":"水星", "Venus":"金星",
-            "Mars":"火星", "Jupiter":"木星", "Saturn":"土星",
-            "Uranus":"天王星", "Neptune":"海王星", "Pluto":"冥王星",
-            "Ascendant":"アセンダント"
-        }
-        for p in planets:
-            name = planet_names.get(p.get("name", ""), p.get("name", ""))
-            sign = sign_names.get(p.get("sign", 0), "不明")
-            degree = round(p.get("normDegree", 0), 1)
-            retro = "（逆行）" if p.get("isRetro") == "true" else ""
-            lines.append(f"{name}：{sign} {degree}度{retro}")
-        return "\n".join(lines)
+        # デバッグ：生のレスポンスをそのまま返す
+        return str(data)
     except Exception as e:
         return f"取得エラー：{e}"
 
@@ -219,6 +201,55 @@ consultation_text = st.text_area("", placeholder="クライアントから届い
 # ─────────────────────────────────────────────
 # 占術別UI
 # ─────────────────────────────────────────────
+def natal_chart_ui(expander_key, result_key, default_raw_key):
+    CITY_COORDS = {
+        "東京": (35.6762, 139.6503),
+        "大阪": (34.6937, 135.5023),
+        "名古屋": (35.1815, 136.9066),
+        "札幌": (43.0618, 141.3545),
+        "福岡": (33.5904, 130.4017),
+        "仙台": (38.2688, 140.8721),
+        "広島": (34.3853, 132.4553),
+        "京都": (35.0116, 135.7681),
+        "神戸": (34.6901, 135.1956),
+        "秋田": (39.7186, 140.1023),
+        "横浜": (35.4437, 139.6380),
+        "さいたま": (35.8617, 139.6455),
+    }
+    def get_coords(place_str):
+        for city, coords in CITY_COORDS.items():
+            if city in place_str:
+                return coords
+        return (35.6762, 139.6503)
+
+    with st.expander("🌟 生年月日・出生時刻から自動計算する"):
+        nc1, nc2, nc3 = st.columns([1, 1, 1])
+        with nc1:
+            birth_year = st.number_input("生年", min_value=1900, max_value=2100, value=1990, step=1, key=f"birth_year_{expander_key}")
+        with nc2:
+            birth_month = st.number_input("生月", min_value=1, max_value=12, value=1, step=1, key=f"birth_month_{expander_key}")
+        with nc3:
+            birth_day = st.number_input("生日", min_value=1, max_value=31, value=1, step=1, key=f"birth_day_{expander_key}")
+        nt1, nt2 = st.columns([1, 1])
+        with nt1:
+            birth_hour = st.number_input("時（24時間）", min_value=0, max_value=23, value=12, step=1, key=f"birth_hour_{expander_key}")
+        with nt2:
+            birth_minute = st.number_input("分", min_value=0, max_value=59, value=0, step=1, key=f"birth_minute_{expander_key}")
+        birth_place = st.text_input("出生地（例：秋田県秋田市）", key=f"birth_place_{expander_key}")
+        st.caption("※ 緯度経度は主要都市を自動設定します。不明な場合は東京（35.68, 139.69）を使用します。")
+
+        if st.button("🌟 ネイタルチャートを計算する", key=f"calc_btn_{expander_key}"):
+            lat, lon = get_coords(birth_place)
+            result = fetch_natal_chart(birth_year, birth_month, birth_day, birth_hour, birth_minute, lat, lon, tzone=9.0)
+            st.session_state[result_key] = result
+            st.rerun()
+
+        if st.session_state.get(result_key, ""):
+            st.markdown(f'<div class="dice-result">🌟 計算結果：<br>{st.session_state[result_key].replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
+            if st.button("🔄 計算結果をリセット", key=f"reset_btn_{expander_key}"):
+                st.session_state[result_key] = ""
+                st.rerun()
+
 if method_key == "astrodice":
     st.markdown('<div class="section-label">✦ アストロダイス</div>', unsafe_allow_html=True)
     for i, dice in enumerate(st.session_state.dice_sets):
@@ -252,60 +283,9 @@ if method_key == "astrodice":
 
 elif method_key == "astrology":
     st.markdown('<div class="section-label">✦ ネイタルチャート自動計算（任意）</div>', unsafe_allow_html=True)
-    with st.expander("🌟 生年月日・出生時刻から自動計算する"):
-        nc1, nc2, nc3 = st.columns([1, 1, 1])
-        with nc1:
-            birth_year = st.number_input("生年", min_value=1900, max_value=2100, value=1990, step=1, key="birth_year")
-        with nc2:
-            birth_month = st.number_input("生月", min_value=1, max_value=12, value=1, step=1, key="birth_month")
-        with nc3:
-            birth_day = st.number_input("生日", min_value=1, max_value=31, value=1, step=1, key="birth_day")
-        nt1, nt2 = st.columns([1, 1])
-        with nt1:
-            birth_hour = st.number_input("時（24時間）", min_value=0, max_value=23, value=12, step=1, key="birth_hour")
-        with nt2:
-            birth_minute = st.number_input("分", min_value=0, max_value=59, value=0, step=1, key="birth_minute")
-        birth_place = st.text_input("出生地（例：秋田県秋田市）", key="birth_place")
-        st.caption("※ 緯度経度は主要都市を自動設定します。不明な場合は東京（35.68, 139.69）を使用します。")
-
-        CITY_COORDS = {
-            "東京": (35.6762, 139.6503),
-            "大阪": (34.6937, 135.5023),
-            "名古屋": (35.1815, 136.9066),
-            "札幌": (43.0618, 141.3545),
-            "福岡": (33.5904, 130.4017),
-            "仙台": (38.2688, 140.8721),
-            "広島": (34.3853, 132.4553),
-            "京都": (35.0116, 135.7681),
-            "神戸": (34.6901, 135.1956),
-            "秋田": (39.7186, 140.1023),
-            "横浜": (35.4437, 139.6380),
-            "さいたま": (35.8617, 139.6455),
-        }
-
-        def get_coords(place_str):
-            for city, coords in CITY_COORDS.items():
-                if city in place_str:
-                    return coords
-            return (35.6762, 139.6503)  # デフォルト東京
-
-        if st.button("🌟 ネイタルチャートを計算する"):
-            lat, lon = get_coords(birth_place)
-            result = fetch_natal_chart(
-                birth_year, birth_month, birth_day,
-                birth_hour, birth_minute, lat, lon, tzone=9.0
-            )
-            st.session_state.natal_result = result
-            st.rerun()
-
-        if st.session_state.natal_result:
-            st.markdown(f'<div class="dice-result">🌟 計算結果：<br>{st.session_state.natal_result.replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
-            if st.button("🔄 計算結果をリセット"):
-                st.session_state.natal_result = ""
-                st.rerun()
-
+    natal_chart_ui("main", "natal_result", "raw_data")
     st.markdown('<div class="section-label">✦ 出目（任意）</div>', unsafe_allow_html=True)
-    default_raw = st.session_state.natal_result if st.session_state.natal_result else ""
+    default_raw = st.session_state.get("natal_result", "")
     raw_data = st.text_area("", value=default_raw, placeholder="ネイタルチャートの情報を貼り付けてください", height=150, label_visibility="collapsed", key="raw_data")
 
 else:
@@ -341,8 +321,15 @@ if mode == "mashup":
         label_visibility="collapsed",
         key="method2",
     )
-    st.markdown('<div class="section-label">✦ 占術２の生データ</div>', unsafe_allow_html=True)
-    raw_data2 = st.text_area("", placeholder="占術２の出目を貼り付けてください", height=150, label_visibility="collapsed", key="raw_data2")
+    if method_key2 == "astrology":
+        st.markdown('<div class="section-label">✦ ネイタルチャート自動計算（占術２）</div>', unsafe_allow_html=True)
+        natal_chart_ui("mashup2", "natal_result2", "raw_data2")
+        st.markdown('<div class="section-label">✦ 占術２の生データ</div>', unsafe_allow_html=True)
+        default_raw2 = st.session_state.get("natal_result2", "")
+        raw_data2 = st.text_area("", value=default_raw2, placeholder="ネイタルチャートの情報を貼り付けてください", height=150, label_visibility="collapsed", key="raw_data2")
+    else:
+        st.markdown('<div class="section-label">✦ 占術２の生データ</div>', unsafe_allow_html=True)
+        raw_data2 = st.text_area("", placeholder="占術２の出目を貼り付けてください", height=150, label_visibility="collapsed", key="raw_data2")
 else:
     method_key2 = None
     raw_data2 = ""
