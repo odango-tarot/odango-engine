@@ -148,11 +148,14 @@ with col2:
 st.markdown('<div class="section-label">✦ ご相談内容（任意）</div>', unsafe_allow_html=True)
 consultation = st.text_input("", placeholder="例：仕事の転職について", label_visibility="collapsed", key="consultation")
 
-st.markdown('<div class="section-label">✦ 生データ / 下書き</div>', unsafe_allow_html=True)
-raw_data = st.text_area("", placeholder="出目・カード情報、または下書き原稿を貼り付けてください", height=200, label_visibility="collapsed", key="raw_data")
+st.markdown('<div class="section-label">✦ クライアントの依頼文章（任意）</div>', unsafe_allow_html=True)
+consultation_text = st.text_area("", placeholder="クライアントから届いた相談文をそのまま貼り付けてください", height=120, label_visibility="collapsed", key="consultation_text")
+
+st.markdown('<div class="section-label">✦ 出目（任意）</div>', unsafe_allow_html=True)
+raw_data = st.text_area("", placeholder="カード名・星の配置・サイコロの出目など", height=150, label_visibility="collapsed", key="raw_data")
 
 st.markdown('<div class="section-label">✦ 補足メモ（任意）</div>', unsafe_allow_html=True)
-memo = st.text_area("", placeholder="気になったこと・クライアントの背景など", height=80, label_visibility="collapsed", key="memo")
+memo = st.text_area("", placeholder="占い師の直感・クライアントの背景など", height=80, label_visibility="collapsed", key="memo")
 
 st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
