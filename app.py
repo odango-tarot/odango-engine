@@ -248,6 +248,24 @@ if st.button(btn_label):
             st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
             st.markdown('<div class="section-label">✦ 生成原稿</div>', unsafe_allow_html=True)
 
+            # 入力サマリー表示
+            summary_parts = []
+            if consultation:
+                summary_parts.append(f"📌 相談ジャンル：{consultation}")
+            if consultation_text:
+                summary_parts.append(f"💬 依頼文章：{consultation_text}")
+            if raw_data:
+                summary_parts.append(f"🎴 出目：{raw_data}")
+            if memo:
+                summary_parts.append(f"📝 補足メモ：{memo}")
+
+            if summary_parts:
+                summary_text = "\n".join(summary_parts)
+                st.markdown(
+                    f'<div style="background:rgba(196,164,255,0.07);border:1px solid rgba(196,164,255,0.2);border-radius:10px;padding:16px;margin-bottom:16px;font-size:13px;line-height:1.8;color:rgba(232,213,183,0.7);white-space:pre-wrap;">{summary_text}</div>',
+                    unsafe_allow_html=True,
+                )
+
             output_placeholder = st.empty()
             full_output = ""
 
