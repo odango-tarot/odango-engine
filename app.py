@@ -206,8 +206,8 @@ else:
 if st.button(btn_label):
     if not client_name.strip():
         st.error("クライアント名を入力してください。")
-    elif not raw_data.strip():
-        st.error("生データ / 下書きを入力してください。")
+    elif not raw_data.strip() and mode == "rewrite":
+        st.error("リライトモードでは下書きを入力してください。")
     elif mode == "mashup" and not raw_data2.strip():
         st.error("占術２の生データを入力してください。")
     else:
