@@ -1,7 +1,13 @@
 import os
+import random
 import anthropic
 import streamlit as st
 from prompt import FORTUNE_METHODS, get_system_prompt, build_user_message, get_mashup_system_prompt, build_mashup_user_message
+
+# アストロダイスの面
+ASTRO_PLANETS = ["太陽", "月", "水星", "金星", "火星", "木星", "土星", "天王星", "海王星", "冥王星", "キロン", "ドラゴンヘッド"]
+ASTRO_SIGNS = ["おひつじ座", "おうし座", "ふたご座", "かに座", "しし座", "おとめ座", "てんびん座", "さそり座", "いて座", "やぎ座", "みずがめ座", "うお座"]
+ASTRO_HOUSES = ["1ハウス", "2ハウス", "3ハウス", "4ハウス", "5ハウス", "6ハウス", "7ハウス", "8ハウス", "9ハウス", "10ハウス", "11ハウス", "12ハウス"]
 
 # ─────────────────────────────────────────────
 # ページ設定
@@ -73,6 +79,16 @@ st.markdown("""
         background: linear-gradient(90deg, transparent, rgba(196,164,255,0.3), transparent);
         margin: 24px 0;
     }
+    .dice-result {
+        background: rgba(196,164,255,0.08);
+        border: 1px solid rgba(196,164,255,0.3);
+        border-radius: 10px;
+        padding: 12px 16px;
+        font-size: 14px;
+        color: #e8d5b7;
+        margin-bottom: 8px;
+        letter-spacing: 0.05em;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -105,6 +121,12 @@ def check_password():
 
 if not check_password():
     st.stop()
+
+# ─────────────────────────────────────────────
+# セッション初期化（アストロダイス用）
+# ─────────────────────────────────────────────
+if "dice_sets" not in st.session_state:
+    st.session_state.dice_sets = []  # [{label, planet, sign, house}, ...]
 
 # ─────────────────────────────────────────────
 # ヘッダー
@@ -151,8 +173,48 @@ consultation = st.text_input("", placeholder="例：仕事の転職について"
 st.markdown('<div class="section-label">✦ クライアントの依頼文章（任意）</div>', unsafe_allow_html=True)
 consultation_text = st.text_area("", placeholder="クライアントから届いた相談文をそのまま貼り付けてください", height=120, label_visibility="collapsed", key="consultation_text")
 
-st.markdown('<div class="section-label">✦ 出目（任意）</div>', unsafe_allow_html=True)
-raw_data = st.text_area("", placeholder="カード名・星の配置・サイコロの出目など", height=150, label_visibility="collapsed", key="raw_data")
+# ─────────────────────────────────────────────
+# アストロダイスUI（アストロダイス選択時のみ）
+# ─────────────────────────────────────────────
+if method_key == "astrodice":
+    st.markdown('<div class="section-label">✦ アストロダイス</div>', unsafe_allow_html=True)
+
+    for i, dice in enumerate(st.session_state.dice_sets):
+        st.markdown(f'<div class="dice-result">🎲 第{i+1}投｜{dice["label"] or "（ラベルなし）"}　→　{dice["planet"]} × {dice["sign"]} × {dice["house"]}</div>', unsafe_allow_html=True)
+
+    if len(st.session_state.dice_sets) < 3:
+        new_label = st.text_input(
+            "",
+            placeholder=f"第{len(st.session_state.dice_sets)+1}投のテーマ（例：現状、課題、アドバイス）",
+            label_visibility="collapsed",
+            key=f"dice_label_{len(st.session_state.dice_sets)}",
+        )
+        if st.button(f"🎲 第{len(st.session_state.dice_sets)+1}投を振る"):
+            st.session_state.dice_sets.append({
+                "label": new_label,
+                "planet": random.choice(ASTRO_PLANETS),
+                "sign": random.choice(ASTRO_SIGNS),
+                "house": random.choice(ASTRO_HOUSES),
+            })
+            st.rerun()
+
+    if st.session_state.dice_sets:
+        if st.button("🔄 サイコロをリセット"):
+            st.session_state.dice_sets = []
+            st.rerun()
+
+    # 出目テキストをraw_dataに自動セット
+    if st.session_state.dice_sets:
+        raw_data = "\n".join([
+            f"第{i+1}投（{d['label'] or 'テーマなし'}）：{d['planet']} × {d['sign']} × {d['house']}"
+            for i, d in enumerate(st.session_state.dice_sets)
+        ])
+    else:
+        raw_data = ""
+
+else:
+    st.markdown('<div class="section-label">✦ 出目（任意）</div>', unsafe_allow_html=True)
+    raw_data = st.text_area("", placeholder="カード名・星の配置・サイコロの出目など", height=150, label_visibility="collapsed", key="raw_data")
 
 st.markdown('<div class="section-label">✦ 補足メモ（任意）</div>', unsafe_allow_html=True)
 memo = st.text_area("", placeholder="占い師の直感・クライアントの背景など", height=80, label_visibility="collapsed", key="memo")
@@ -167,7 +229,7 @@ mode = st.radio("", options=["generate", "rewrite", "mashup"],
     format_func=lambda x: {"generate": "✨ 出目から生成", "rewrite": "✏️ 下書きをリライト", "mashup": "🔀 マッシュアップ"}[x],
     horizontal=True, label_visibility="collapsed", key="mode")
 
-# マッシュアップ用の追加入力（モード選択の直後）
+# マッシュアップ用の追加入力
 if mode == "mashup":
     st.markdown('<div class="section-label">✦ 占術２</div>', unsafe_allow_html=True)
     method_key2 = st.selectbox(
@@ -291,6 +353,6 @@ if st.button(btn_label):
 # ─────────────────────────────────────────────
 st.markdown("""
 <div style="text-align:center; margin-top:48px; padding-bottom:32px;">
-    <div style="font-size:11px; letter-spacing:3px; color:rgba(196,164,255,0.4);">🍡 ODANGO ENGINE v1.1 ✦ Private Use Only</div>
+    <div style="font-size:11px; letter-spacing:3px; color:rgba(196,164,255,0.4);">🍡 ODANGO ENGINE v1.2 ✦ Private Use Only</div>
 </div>
 """, unsafe_allow_html=True)
