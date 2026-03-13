@@ -1,5 +1,6 @@
 import os
 import random
+import requests
 import anthropic
 import streamlit as st
 from prompt import FORTUNE_METHODS, get_system_prompt, build_user_message, get_mashup_system_prompt, build_mashup_user_message
@@ -8,6 +9,49 @@ from prompt import FORTUNE_METHODS, get_system_prompt, build_user_message, get_m
 ASTRO_PLANETS = ["太陽", "月", "水星", "金星", "火星", "木星", "土星", "天王星", "海王星", "冥王星", "キロン", "ドラゴンヘッド"]
 ASTRO_SIGNS = ["おひつじ座", "おうし座", "ふたご座", "かに座", "しし座", "おとめ座", "てんびん座", "さそり座", "いて座", "やぎ座", "みずがめ座", "うお座"]
 ASTRO_HOUSES = ["1ハウス", "2ハウス", "3ハウス", "4ハウス", "5ハウス", "6ハウス", "7ハウス", "8ハウス", "9ハウス", "10ハウス", "11ハウス", "12ハウス"]
+
+# ─────────────────────────────────────────────
+# ネイタルチャート自動計算
+# ─────────────────────────────────────────────
+def fetch_natal_chart(year, month, day, hour, minute, lat, lon, tzone):
+    api_key = st.secrets.get("ASTROLOGY_API_KEY", "")
+    url = "https://json.freeastrologyapi.com/planets"
+    headers = {
+        "Content-Type": "application/json",
+        "x-api-key": api_key,
+    }
+    payload = {
+        "year": year, "month": month, "date": day,
+        "hours": hour, "minutes": minute, "seconds": 0,
+        "latitude": lat, "longitude": lon, "timezone": tzone,
+        "config": {"observation_point": "topocentric", "ayanamsha": "lahiri"}
+    }
+    try:
+        res = requests.post(url, json=payload, headers=headers, timeout=10)
+        res.raise_for_status()
+        data = res.json()
+        planets = data.get("output", [])
+        lines = []
+        sign_names = {
+            1:"おひつじ座", 2:"おうし座", 3:"ふたご座", 4:"かに座",
+            5:"しし座", 6:"おとめ座", 7:"てんびん座", 8:"さそり座",
+            9:"いて座", 10:"やぎ座", 11:"みずがめ座", 12:"うお座"
+        }
+        planet_names = {
+            "Sun":"太陽", "Moon":"月", "Mercury":"水星", "Venus":"金星",
+            "Mars":"火星", "Jupiter":"木星", "Saturn":"土星",
+            "Uranus":"天王星", "Neptune":"海王星", "Pluto":"冥王星",
+            "Ascendant":"アセンダント"
+        }
+        for p in planets:
+            name = planet_names.get(p.get("name", ""), p.get("name", ""))
+            sign = sign_names.get(p.get("sign", 0), "不明")
+            degree = round(p.get("normDegree", 0), 1)
+            retro = "（逆行）" if p.get("isRetro") == "true" else ""
+            lines.append(f"{name}：{sign} {degree}度{retro}")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"取得エラー：{e}"
 
 # ─────────────────────────────────────────────
 # ページ設定
@@ -98,17 +142,14 @@ st.markdown("""
 def check_password():
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
-
     if st.session_state.authenticated:
         return True
-
     st.markdown("""
     <div style="text-align:center; padding: 60px 0 32px 0;">
         <div style="font-size:11px; letter-spacing:6px; color:#c4a4ff; margin-bottom:12px;">✦ PRIVATE SYSTEM ✦</div>
         <h1 style="font-size:2rem; background: linear-gradient(90deg, #e8d5b7, #c4a4ff); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">🍡 ODANGO ENGINE</h1>
     </div>
     """, unsafe_allow_html=True)
-
     pw = st.text_input("パスワード", type="password", key="pw_input")
     if st.button("ログイン"):
         correct = st.secrets.get("APP_PASSWORD", "")
@@ -123,10 +164,12 @@ if not check_password():
     st.stop()
 
 # ─────────────────────────────────────────────
-# セッション初期化（アストロダイス用）
+# セッション初期化
 # ─────────────────────────────────────────────
 if "dice_sets" not in st.session_state:
-    st.session_state.dice_sets = []  # [{label, planet, sign, house}, ...]
+    st.session_state.dice_sets = []
+if "natal_result" not in st.session_state:
+    st.session_state.natal_result = ""
 
 # ─────────────────────────────────────────────
 # ヘッダー
@@ -174,14 +217,12 @@ st.markdown('<div class="section-label">✦ クライアントの依頼文章（
 consultation_text = st.text_area("", placeholder="クライアントから届いた相談文をそのまま貼り付けてください", height=120, label_visibility="collapsed", key="consultation_text")
 
 # ─────────────────────────────────────────────
-# アストロダイスUI（アストロダイス選択時のみ）
+# 占術別UI
 # ─────────────────────────────────────────────
 if method_key == "astrodice":
     st.markdown('<div class="section-label">✦ アストロダイス</div>', unsafe_allow_html=True)
-
     for i, dice in enumerate(st.session_state.dice_sets):
         st.markdown(f'<div class="dice-result">🎲 第{i+1}投｜{dice["label"] or "（ラベルなし）"}　→　{dice["planet"]} × {dice["sign"]} × {dice["house"]}</div>', unsafe_allow_html=True)
-
     if len(st.session_state.dice_sets) < 3:
         new_label = st.text_input(
             "",
@@ -197,13 +238,10 @@ if method_key == "astrodice":
                 "house": random.choice(ASTRO_HOUSES),
             })
             st.rerun()
-
     if st.session_state.dice_sets:
         if st.button("🔄 サイコロをリセット"):
             st.session_state.dice_sets = []
             st.rerun()
-
-    # 出目テキストをraw_dataに自動セット
     if st.session_state.dice_sets:
         raw_data = "\n".join([
             f"第{i+1}投（{d['label'] or 'テーマなし'}）：{d['planet']} × {d['sign']} × {d['house']}"
@@ -211,6 +249,64 @@ if method_key == "astrodice":
         ])
     else:
         raw_data = ""
+
+elif method_key == "astrology":
+    st.markdown('<div class="section-label">✦ ネイタルチャート自動計算（任意）</div>', unsafe_allow_html=True)
+    with st.expander("🌟 生年月日・出生時刻から自動計算する"):
+        nc1, nc2, nc3 = st.columns([1, 1, 1])
+        with nc1:
+            birth_year = st.number_input("生年", min_value=1900, max_value=2100, value=1990, step=1, key="birth_year")
+        with nc2:
+            birth_month = st.number_input("生月", min_value=1, max_value=12, value=1, step=1, key="birth_month")
+        with nc3:
+            birth_day = st.number_input("生日", min_value=1, max_value=31, value=1, step=1, key="birth_day")
+        nt1, nt2 = st.columns([1, 1])
+        with nt1:
+            birth_hour = st.number_input("時（24時間）", min_value=0, max_value=23, value=12, step=1, key="birth_hour")
+        with nt2:
+            birth_minute = st.number_input("分", min_value=0, max_value=59, value=0, step=1, key="birth_minute")
+        birth_place = st.text_input("出生地（例：秋田県秋田市）", key="birth_place")
+        st.caption("※ 緯度経度は主要都市を自動設定します。不明な場合は東京（35.68, 139.69）を使用します。")
+
+        CITY_COORDS = {
+            "東京": (35.6762, 139.6503),
+            "大阪": (34.6937, 135.5023),
+            "名古屋": (35.1815, 136.9066),
+            "札幌": (43.0618, 141.3545),
+            "福岡": (33.5904, 130.4017),
+            "仙台": (38.2688, 140.8721),
+            "広島": (34.3853, 132.4553),
+            "京都": (35.0116, 135.7681),
+            "神戸": (34.6901, 135.1956),
+            "秋田": (39.7186, 140.1023),
+            "横浜": (35.4437, 139.6380),
+            "さいたま": (35.8617, 139.6455),
+        }
+
+        def get_coords(place_str):
+            for city, coords in CITY_COORDS.items():
+                if city in place_str:
+                    return coords
+            return (35.6762, 139.6503)  # デフォルト東京
+
+        if st.button("🌟 ネイタルチャートを計算する"):
+            lat, lon = get_coords(birth_place)
+            result = fetch_natal_chart(
+                birth_year, birth_month, birth_day,
+                birth_hour, birth_minute, lat, lon, tzone=9.0
+            )
+            st.session_state.natal_result = result
+            st.rerun()
+
+        if st.session_state.natal_result:
+            st.markdown(f'<div class="dice-result">🌟 計算結果：<br>{st.session_state.natal_result.replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
+            if st.button("🔄 計算結果をリセット"):
+                st.session_state.natal_result = ""
+                st.rerun()
+
+    st.markdown('<div class="section-label">✦ 出目（任意）</div>', unsafe_allow_html=True)
+    default_raw = st.session_state.natal_result if st.session_state.natal_result else ""
+    raw_data = st.text_area("", value=default_raw, placeholder="ネイタルチャートの情報を貼り付けてください", height=150, label_visibility="collapsed", key="raw_data")
 
 else:
     st.markdown('<div class="section-label">✦ 出目（任意）</div>', unsafe_allow_html=True)
@@ -229,7 +325,6 @@ mode = st.radio("", options=["generate", "rewrite", "mashup"],
     format_func=lambda x: {"generate": "✨ 出目から生成", "rewrite": "✏️ 下書きをリライト", "mashup": "🔀 マッシュアップ"}[x],
     horizontal=True, label_visibility="collapsed", key="mode")
 
-# マッシュアップ用の追加入力
 if mode == "mashup":
     st.markdown('<div class="section-label">✦ 占術２</div>', unsafe_allow_html=True)
     method_key2 = st.selectbox(
@@ -278,7 +373,7 @@ if st.button(btn_label):
     else:
         api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
         if not api_key:
-            st.error("APIキーが設定されていません。Streamlit CloudのSecretsを確認してください。")
+            st.error("APIキーが設定されていません。")
         else:
             if mode == "mashup":
                 system_prompt = get_mashup_system_prompt(method_key, method_key2)
@@ -310,7 +405,6 @@ if st.button(btn_label):
             st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
             st.markdown('<div class="section-label">✦ 生成原稿</div>', unsafe_allow_html=True)
 
-            # 入力サマリー表示
             summary_parts = []
             if consultation:
                 summary_parts.append(f"📌 相談ジャンル：{consultation}")
@@ -353,6 +447,6 @@ if st.button(btn_label):
 # ─────────────────────────────────────────────
 st.markdown("""
 <div style="text-align:center; margin-top:48px; padding-bottom:32px;">
-    <div style="font-size:11px; letter-spacing:3px; color:rgba(196,164,255,0.4);">🍡 ODANGO ENGINE v1.2 ✦ Private Use Only</div>
+    <div style="font-size:11px; letter-spacing:3px; color:rgba(196,164,255,0.4);">🍡 ODANGO ENGINE v1.3 ✦ Private Use Only</div>
 </div>
 """, unsafe_allow_html=True)
