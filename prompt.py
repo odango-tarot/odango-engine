@@ -80,6 +80,7 @@ def get_system_prompt(method_key: str) -> str:
 def build_user_message(
     client_name: str,
     consultation: str,
+    consultation_text: str,
     method_label: str,
     raw_data: str,
     memo: str,
@@ -94,15 +95,24 @@ def build_user_message(
 # クライアント情報
 - お名前：{client_name}さん
 - 占術：{method_label}
-- ご相談内容：{consultation if consultation else "（記載なし）"}
+- ご相談ジャンル：{consultation if consultation else "（記載なし）"}
+"""
 
-# 生データ / 下書き
+    if consultation_text:
+        message += f"""
+# クライアントの依頼文章（原文）
+{consultation_text}
+"""
+
+    if raw_data:
+        message += f"""
+# 出目
 {raw_data}
 """
 
     if memo:
         message += f"""
-# 補足メモ
+# 占い師の補足メモ
 {memo}
 """
 
