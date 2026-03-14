@@ -162,13 +162,6 @@ st.markdown("""
         margin-bottom: 8px;
         letter-spacing: 0.05em;
     }
-    .person-setting-box {
-        background: rgba(196,164,255,0.06);
-        border: 1px solid rgba(196,164,255,0.25);
-        border-radius: 12px;
-        padding: 20px;
-        margin: 12px 0;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -260,57 +253,63 @@ def natal_chart_ui(expander_key, result_key):
 # ─────────────────────────────────────────────
 # ルノルマン人物設定UIコンポーネント
 # ─────────────────────────────────────────────
-def lenormand_person_setting_ui():
+def lenormand_person_setting_ui(key_suffix="main"):
     """ルノルマン選択時に表示する人物カード設定UI。設定dictを返す。"""
     st.markdown('<div class="section-label">✦ 人物カード設定（ルノルマン）</div>', unsafe_allow_html=True)
-    st.markdown('<div class="person-setting-box">', unsafe_allow_html=True)
 
-    # 依頼者の性別
-    client_gender = st.radio(
-        "依頼者の性別",
-        options=["女性", "男性"],
-        horizontal=True,
-        key="lenormand_gender",
-    )
-
-    st.markdown("---")
-
-    ROLE_OPTIONS = ["依頼者本人", "恋人・配偶者", "片想いの相手", "友人・知人", "その他"]
-
-    col_l, col_r = st.columns(2)
-
-    with col_l:
-        st.markdown("**🌹 淑女（29番）の役割**")
-        lady_role = st.selectbox(
-            "",
-            options=ROLE_OPTIONS,
-            index=0 if client_gender == "女性" else 1,
-            label_visibility="collapsed",
-            key="lenormand_lady_role",
+    with st.container(border=True):
+        client_gender = st.radio(
+            "依頼者の性別",
+            options=["女性", "男性"],
+            horizontal=True,
+            key=f"lenormand_gender_{key_suffix}",
         )
-        lady_custom = ""
-        if lady_role == "その他":
-            lady_custom = st.text_input("具体的に入力", placeholder="例：娘、姉", key="lenormand_lady_custom")
 
-    with col_r:
-        st.markdown("**🎩 紳士（28番）の役割**")
-        knight_role = st.selectbox(
-            "",
-            options=ROLE_OPTIONS,
-            index=1 if client_gender == "女性" else 0,
-            label_visibility="collapsed",
-            key="lenormand_knight_role",
-        )
-        knight_custom = ""
-        if knight_role == "その他":
-            knight_custom = st.text_input("具体的に入力", placeholder="例：息子、弟", key="lenormand_knight_custom")
+        st.markdown("---")
 
-    st.markdown('</div>', unsafe_allow_html=True)
+        ROLE_OPTIONS = ["依頼者本人", "恋人・配偶者", "片想いの相手", "友人・知人", "その他"]
 
-    # 設定サマリーを表示
-    lady_desc = lady_custom if lady_role == "その他" and lady_custom else lady_role
-    knight_desc = knight_custom if knight_role == "その他" and knight_custom else knight_role
-    st.caption(f"📌 淑女＝{lady_desc}　／　紳士＝{knight_desc}　／　依頼者：{client_gender}")
+        col_l, col_r = st.columns(2)
+
+        with col_l:
+            st.markdown("🌹 **淑女（29番）の役割**")
+            lady_default = 0 if client_gender == "女性" else 1
+            lady_role = st.selectbox(
+                "",
+                options=ROLE_OPTIONS,
+                index=lady_default,
+                label_visibility="collapsed",
+                key=f"lenormand_lady_role_{key_suffix}",
+            )
+            lady_custom = ""
+            if lady_role == "その他":
+                lady_custom = st.text_input(
+                    "具体的に入力",
+                    placeholder="例：娘、姉",
+                    key=f"lenormand_lady_custom_{key_suffix}"
+                )
+
+        with col_r:
+            st.markdown("🎩 **紳士（28番）の役割**")
+            knight_default = 1 if client_gender == "女性" else 0
+            knight_role = st.selectbox(
+                "",
+                options=ROLE_OPTIONS,
+                index=knight_default,
+                label_visibility="collapsed",
+                key=f"lenormand_knight_role_{key_suffix}",
+            )
+            knight_custom = ""
+            if knight_role == "その他":
+                knight_custom = st.text_input(
+                    "具体的に入力",
+                    placeholder="例：息子、弟",
+                    key=f"lenormand_knight_custom_{key_suffix}"
+                )
+
+        lady_desc = lady_custom if lady_role == "その他" and lady_custom else lady_role
+        knight_desc = knight_custom if knight_role == "その他" and knight_custom else knight_role
+        st.caption(f"📌 淑女＝{lady_desc}　／　紳士＝{knight_desc}　／　依頼者：{client_gender}")
 
     return {
         "client_gender": client_gender,
@@ -351,7 +350,7 @@ st.markdown('<div class="section-label">✦ クライアントの依頼文章（
 consultation_text = st.text_area("", placeholder="クライアントから届いた相談文をそのまま貼り付けてください", height=120, label_visibility="collapsed", key="consultation_text")
 
 # ─────────────────────────────────────────────
-# 占術別UI（ルノルマン人物設定 含む）
+# 占術別UI
 # ─────────────────────────────────────────────
 person_setting = {}
 
@@ -390,8 +389,7 @@ elif method_key == "astrology":
     raw_data = st.text_area("", value=st.session_state.get("natal_result", ""), placeholder="ネイタルチャートの情報を貼り付けてください", height=150, label_visibility="collapsed", key="raw_data")
 
 elif method_key == "lenormand":
-    # 人物カード設定UI
-    person_setting = lenormand_person_setting_ui()
+    person_setting = lenormand_person_setting_ui("main")
     st.markdown('<div class="section-label">✦ 出目（任意）</div>', unsafe_allow_html=True)
     raw_data = st.text_area("", placeholder="グラン・タブローの配置・カード名など", height=150, label_visibility="collapsed", key="raw_data")
 
@@ -434,9 +432,7 @@ if mode == "mashup":
         st.markdown('<div class="section-label">✦ 占術２の生データ</div>', unsafe_allow_html=True)
         raw_data2 = st.text_area("", value=st.session_state.get("natal_result2", ""), placeholder="ネイタルチャートの情報を貼り付けてください", height=150, label_visibility="collapsed", key="raw_data2")
     elif method_key2 == "lenormand":
-        # マッシュアップで占術２がルノルマンの場合も人物設定を表示
-        st.markdown('<div class="section-label">✦ 人物カード設定（占術２：ルノルマン）</div>', unsafe_allow_html=True)
-        person_setting = lenormand_person_setting_ui()
+        person_setting = lenormand_person_setting_ui("mashup2")
         st.markdown('<div class="section-label">✦ 占術２の生データ</div>', unsafe_allow_html=True)
         raw_data2 = st.text_area("", placeholder="グラン・タブローの配置・カード名など", height=150, label_visibility="collapsed", key="raw_data2")
     else:
