@@ -162,6 +162,13 @@ st.markdown("""
         margin-bottom: 8px;
         letter-spacing: 0.05em;
     }
+    .person-setting-box {
+        background: rgba(196,164,255,0.06);
+        border: 1px solid rgba(196,164,255,0.25);
+        border-radius: 12px;
+        padding: 20px;
+        margin: 12px 0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -251,6 +258,69 @@ def natal_chart_ui(expander_key, result_key):
                 st.rerun()
 
 # ─────────────────────────────────────────────
+# ルノルマン人物設定UIコンポーネント
+# ─────────────────────────────────────────────
+def lenormand_person_setting_ui():
+    """ルノルマン選択時に表示する人物カード設定UI。設定dictを返す。"""
+    st.markdown('<div class="section-label">✦ 人物カード設定（ルノルマン）</div>', unsafe_allow_html=True)
+    st.markdown('<div class="person-setting-box">', unsafe_allow_html=True)
+
+    # 依頼者の性別
+    client_gender = st.radio(
+        "依頼者の性別",
+        options=["女性", "男性"],
+        horizontal=True,
+        key="lenormand_gender",
+    )
+
+    st.markdown("---")
+
+    ROLE_OPTIONS = ["依頼者本人", "恋人・配偶者", "片想いの相手", "友人・知人", "その他"]
+
+    col_l, col_r = st.columns(2)
+
+    with col_l:
+        st.markdown("**🌹 淑女（29番）の役割**")
+        lady_role = st.selectbox(
+            "",
+            options=ROLE_OPTIONS,
+            index=0 if client_gender == "女性" else 1,
+            label_visibility="collapsed",
+            key="lenormand_lady_role",
+        )
+        lady_custom = ""
+        if lady_role == "その他":
+            lady_custom = st.text_input("具体的に入力", placeholder="例：娘、姉", key="lenormand_lady_custom")
+
+    with col_r:
+        st.markdown("**🎩 紳士（28番）の役割**")
+        knight_role = st.selectbox(
+            "",
+            options=ROLE_OPTIONS,
+            index=1 if client_gender == "女性" else 0,
+            label_visibility="collapsed",
+            key="lenormand_knight_role",
+        )
+        knight_custom = ""
+        if knight_role == "その他":
+            knight_custom = st.text_input("具体的に入力", placeholder="例：息子、弟", key="lenormand_knight_custom")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # 設定サマリーを表示
+    lady_desc = lady_custom if lady_role == "その他" and lady_custom else lady_role
+    knight_desc = knight_custom if knight_role == "その他" and knight_custom else knight_role
+    st.caption(f"📌 淑女＝{lady_desc}　／　紳士＝{knight_desc}　／　依頼者：{client_gender}")
+
+    return {
+        "client_gender": client_gender,
+        "lady_role": lady_role,
+        "lady_custom": lady_custom,
+        "knight_role": knight_role,
+        "knight_custom": knight_custom,
+    }
+
+# ─────────────────────────────────────────────
 # 入力フォーム
 # ─────────────────────────────────────────────
 col1, col2 = st.columns([1, 1])
@@ -280,7 +350,11 @@ consultation = st.text_input("", placeholder="例：仕事の転職について"
 st.markdown('<div class="section-label">✦ クライアントの依頼文章（任意）</div>', unsafe_allow_html=True)
 consultation_text = st.text_area("", placeholder="クライアントから届いた相談文をそのまま貼り付けてください", height=120, label_visibility="collapsed", key="consultation_text")
 
-# 占術別UI
+# ─────────────────────────────────────────────
+# 占術別UI（ルノルマン人物設定 含む）
+# ─────────────────────────────────────────────
+person_setting = {}
+
 if method_key == "astrodice":
     st.markdown('<div class="section-label">✦ アストロダイス</div>', unsafe_allow_html=True)
     for i, dice in enumerate(st.session_state.dice_sets):
@@ -314,6 +388,12 @@ elif method_key == "astrology":
     natal_chart_ui("main", "natal_result")
     st.markdown('<div class="section-label">✦ 出目（任意）</div>', unsafe_allow_html=True)
     raw_data = st.text_area("", value=st.session_state.get("natal_result", ""), placeholder="ネイタルチャートの情報を貼り付けてください", height=150, label_visibility="collapsed", key="raw_data")
+
+elif method_key == "lenormand":
+    # 人物カード設定UI
+    person_setting = lenormand_person_setting_ui()
+    st.markdown('<div class="section-label">✦ 出目（任意）</div>', unsafe_allow_html=True)
+    raw_data = st.text_area("", placeholder="グラン・タブローの配置・カード名など", height=150, label_visibility="collapsed", key="raw_data")
 
 else:
     st.markdown('<div class="section-label">✦ 出目（任意）</div>', unsafe_allow_html=True)
@@ -353,6 +433,12 @@ if mode == "mashup":
         natal_chart_ui("mashup2", "natal_result2")
         st.markdown('<div class="section-label">✦ 占術２の生データ</div>', unsafe_allow_html=True)
         raw_data2 = st.text_area("", value=st.session_state.get("natal_result2", ""), placeholder="ネイタルチャートの情報を貼り付けてください", height=150, label_visibility="collapsed", key="raw_data2")
+    elif method_key2 == "lenormand":
+        # マッシュアップで占術２がルノルマンの場合も人物設定を表示
+        st.markdown('<div class="section-label">✦ 人物カード設定（占術２：ルノルマン）</div>', unsafe_allow_html=True)
+        person_setting = lenormand_person_setting_ui()
+        st.markdown('<div class="section-label">✦ 占術２の生データ</div>', unsafe_allow_html=True)
+        raw_data2 = st.text_area("", placeholder="グラン・タブローの配置・カード名など", height=150, label_visibility="collapsed", key="raw_data2")
     else:
         st.markdown('<div class="section-label">✦ 占術２の生データ</div>', unsafe_allow_html=True)
         raw_data2 = st.text_area("", placeholder="占術２の出目を貼り付けてください", height=150, label_visibility="collapsed", key="raw_data2")
@@ -389,7 +475,7 @@ if st.button(btn_label):
             st.error("APIキーが設定されていません。")
         else:
             if mode == "mashup":
-                system_prompt = get_mashup_system_prompt(method_key, method_key2)
+                system_prompt = get_mashup_system_prompt(method_key, method_key2, person_setting if person_setting else None)
                 user_message = build_mashup_user_message(
                     client_name=client_name,
                     consultation=consultation,
@@ -401,7 +487,7 @@ if st.button(btn_label):
                     char_count=char_count,
                 )
             else:
-                system_prompt = get_system_prompt(method_key)
+                system_prompt = get_system_prompt(method_key, person_setting if person_setting else None)
                 user_message = build_user_message(
                     client_name=client_name,
                     consultation=consultation,
@@ -427,6 +513,10 @@ if st.button(btn_label):
                 summary_parts.append(f"🎴 出目：{raw_data}")
             if memo:
                 summary_parts.append(f"📝 補足メモ：{memo}")
+            if person_setting:
+                lady_desc = person_setting.get("lady_custom") if person_setting.get("lady_role") == "その他" else person_setting.get("lady_role", "")
+                knight_desc = person_setting.get("knight_custom") if person_setting.get("knight_role") == "その他" else person_setting.get("knight_role", "")
+                summary_parts.append(f"🌹 人物設定：淑女＝{lady_desc}　紳士＝{knight_desc}　依頼者：{person_setting.get('client_gender', '')}")
 
             if summary_parts:
                 summary_text = "\n".join(summary_parts)
@@ -460,6 +550,6 @@ if st.button(btn_label):
 # ─────────────────────────────────────────────
 st.markdown("""
 <div style="text-align:center; margin-top:48px; padding-bottom:32px;">
-    <div style="font-size:11px; letter-spacing:3px; color:rgba(196,164,255,0.4);">🍡 ODANGO ENGINE v1.4 ✦ Private Use Only</div>
+    <div style="font-size:11px; letter-spacing:3px; color:rgba(196,164,255,0.4);">🍡 ODANGO ENGINE v1.5 ✦ Private Use Only</div>
 </div>
 """, unsafe_allow_html=True)
