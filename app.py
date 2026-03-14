@@ -37,6 +37,16 @@ CITY_COORDS = {
     "さいたま": (35.8617, 139.6455),
 }
 
+# ルノルマン36枚カードリスト
+LENORMAND_CARDS = [
+    "（未選択）",
+    "騎士", "クローバー", "船", "家", "木", "雲", "蛇", "棺",
+    "花束", "鎌", "鞭", "鳥", "子供", "狐", "熊", "星",
+    "コウノトリ", "犬", "塔", "庭園", "山", "十字路", "鼠", "ハート",
+    "指輪", "本", "手紙", "紳士", "淑女", "百合", "太陽", "月",
+    "鍵", "魚", "錨", "十字架",
+]
+
 def get_coords(place_str):
     for city, coords in CITY_COORDS.items():
         if city in place_str:
@@ -81,6 +91,130 @@ def fetch_natal_chart(year, month, day, hour, minute, lat, lon, tzone):
         return "\n".join(lines)
     except Exception as e:
         return f"取得エラー：{e}"
+
+# ─────────────────────────────────────────────
+# グラン・タブロー配置からプロンプト用テキストを生成
+# ─────────────────────────────────────────────
+def build_grand_tableau_text(grid, person_setting):
+    """
+    grid: list of 36 strings (行1×8 + 行2×8 + 行3×8 + 行4×8 + 最終行×4)
+    配置情報を構造化テキストに変換してプロンプトに渡す
+    """
+    row1 = grid[0:8]
+    row2 = grid[8:16]
+    row3 = grid[16:24]
+    row4 = grid[24:32]
+    row5 = grid[32:36]
+
+    # 依頼者カードを特定
+    client_gender = person_setting.get("client_gender", "女性")
+    seeker_card = "淑女" if client_gender == "女性" else "紳士"
+
+    # 淑女・紳士の位置を特定
+    all_rows = [row1, row2, row3, row4, row5]
+    seeker_pos = None
+    lady_pos = None
+    knight_pos = None
+
+    for row_idx, row in enumerate(all_rows):
+        for col_idx, card in enumerate(row):
+            if card == "淑女":
+                lady_pos = (row_idx + 1, col_idx + 1)
+            if card == "紳士":
+                knight_pos = (row_idx + 1, col_idx + 1)
+
+    if seeker_card == "淑女":
+        seeker_pos = lady_pos
+    else:
+        seeker_pos = knight_pos
+
+    lines = []
+    lines.append("【グラン・タブロー配置】")
+    lines.append("※ 配置は「段数（上から）× 列数（左から）」で表します")
+    lines.append("")
+
+    row_labels = ["1段目（最上段）", "2段目", "3段目", "4段目", "最終行（中央4枚）"]
+    for i, (label, row) in enumerate(zip(row_labels, all_rows)):
+        filled = [c if c != "（未選択）" else "？" for c in row]
+        lines.append(f"{label}：{' | '.join(filled)}")
+
+    lines.append("")
+
+    # 位置情報サマリー
+    if lady_pos:
+        row_name = ["最上段", "2段目", "3段目", "4段目", "最終行"][lady_pos[0]-1]
+        bottom = lady_pos[0] == 4 or (lady_pos[0] == 5)
+        top = lady_pos[0] == 1
+        lines.append(f"▼ 淑女の位置：{row_name} / 左から{lady_pos[1]}列目")
+        if top:
+            lines.append("　→ 淑女は最上段：頭上の外部影響カードなし（内面・水面下に意識を向けるとき）")
+        elif bottom:
+            lines.append("　→ 淑女は最下段：下のカードなし（思考・気持ちを表す余裕がない状態）")
+
+        # 過去・未来の列数
+        past_cols = lady_pos[1] - 1
+        future_cols = 8 - lady_pos[1] if lady_pos[0] <= 4 else 0
+        lines.append(f"　→ 過去エリア：{past_cols}列 / 未来エリア：{future_cols}列")
+
+    if knight_pos:
+        row_name = ["最上段", "2段目", "3段目", "4段目", "最終行"][knight_pos[0]-1]
+        lines.append(f"▼ 紳士の位置：{row_name} / 左から{knight_pos[1]}列目")
+
+    lines.append("")
+
+    # 4隅
+    corner_tl = row1[0] if row1[0] != "（未選択）" else "？"
+    corner_tr = row1[7] if row1[7] != "（未選択）" else "？"
+    corner_bl = row4[0] if row4[0] != "（未選択）" else "？"
+    corner_br = row4[7] if row4[7] != "（未選択）" else "？"
+    lines.append(f"▼ 4隅：左上＝{corner_tl} / 右上＝{corner_tr} / 左下＝{corner_bl} / 右下＝{corner_br}")
+    lines.append(f"　→ 対角ルート①：{corner_tl}→{corner_br}")
+    lines.append(f"　→ 対角ルート②：{corner_tr}→{corner_bl}")
+
+    lines.append("")
+
+    # 最下段4枚（アドバイスエリア）
+    bottom4 = [c if c != "（未選択）" else "？" for c in row5]
+    lines.append(f"▼ 最終行4枚（アドバイスメッセージ）：{' | '.join(bottom4)}")
+
+    lines.append("")
+
+    # 依頼者周辺カード（頭上・真下・両脇）
+    if seeker_pos and seeker_pos[0] <= 4:
+        r, c = seeker_pos
+        rows = [row1, row2, row3, row4]
+
+        above = rows[r-2][c-1] if r >= 2 else "（なし）"
+        below = rows[r][c-1] if r <= 3 else "（なし）"
+        left = rows[r-1][c-2] if c >= 2 else "（なし）"
+        right = rows[r-1][c] if c <= 7 else "（なし）"
+
+        above2 = rows[r-3][c-1] if r >= 3 else "（なし）"
+        above3 = rows[r-4][c-1] if r >= 4 else "（なし）"
+
+        left2 = rows[r-1][c-3] if c >= 3 else "（なし）"
+        right2 = rows[r-1][c+1] if c <= 6 else "（なし）"
+
+        lines.append(f"▼ {seeker_card}の周辺カード")
+        lines.append(f"　真上：{above}　（その上：{above2}　さらに上：{above3}）")
+        lines.append(f"　真下：{below}")
+        lines.append(f"　左：{left}　左2：{left2}")
+        lines.append(f"　右：{right}　右2：{right2}")
+
+        # 未来ルート（右へ1枚ずつ）
+        future_route = []
+        for fc in range(c, 8):  # c列目（現在）の右
+            card = rows[r-1][fc]
+            if card and card != "（未選択）" and card != seeker_card:
+                col_above = rows[r-2][fc] if r >= 2 else "（なし）"
+                col_above2 = rows[r-3][fc] if r >= 3 else "（なし）"
+                future_route.append(f"　{len(future_route)+1}ヶ月後：{card}（縦上：{col_above} / さらに上：{col_above2}）")
+        if future_route:
+            lines.append("")
+            lines.append(f"▼ {seeker_card}の未来ルート（右へ1枚＝1ヶ月）")
+            lines.extend(future_route)
+
+    return "\n".join(lines)
 
 # ─────────────────────────────────────────────
 # ページ設定
@@ -234,13 +368,11 @@ def natal_chart_ui(expander_key, result_key):
             birth_minute = st.number_input("分", min_value=0, max_value=59, value=0, step=1, key=f"birth_minute_{expander_key}")
         birth_place = st.text_input("出生地（例：秋田県秋田市）", key=f"birth_place_{expander_key}")
         st.caption("※ 緯度経度は主要都市を自動設定します。不明な場合は東京（35.68, 139.69）を使用します。")
-
         if st.button("🌟 ネイタルチャートを計算する", key=f"calc_btn_{expander_key}"):
             lat, lon = get_coords(birth_place)
             result = fetch_natal_chart(birth_year, birth_month, birth_day, birth_hour, birth_minute, lat, lon, tzone=9.0)
             st.session_state[result_key] = result
             st.rerun()
-
         if st.session_state.get(result_key, ""):
             st.markdown(
                 f'<div class="dice-result">🌟 計算結果：<br>{st.session_state[result_key].replace(chr(10), "<br>")}</div>',
@@ -254,9 +386,7 @@ def natal_chart_ui(expander_key, result_key):
 # ルノルマン人物設定UIコンポーネント
 # ─────────────────────────────────────────────
 def lenormand_person_setting_ui(key_suffix="main"):
-    """ルノルマン選択時に表示する人物カード設定UI。設定dictを返す。"""
     st.markdown('<div class="section-label">✦ 人物カード設定（ルノルマン）</div>', unsafe_allow_html=True)
-
     with st.container(border=True):
         client_gender = st.radio(
             "依頼者の性別",
@@ -264,53 +394,34 @@ def lenormand_person_setting_ui(key_suffix="main"):
             horizontal=True,
             key=f"lenormand_gender_{key_suffix}",
         )
-
         st.markdown("---")
-
         ROLE_OPTIONS = ["依頼者本人", "恋人・配偶者", "片想いの相手", "友人・知人", "その他"]
-
         col_l, col_r = st.columns(2)
-
         with col_l:
             st.markdown("🌹 **淑女（29番）の役割**")
-            lady_default = 0 if client_gender == "女性" else 1
             lady_role = st.selectbox(
-                "",
-                options=ROLE_OPTIONS,
-                index=lady_default,
+                "", options=ROLE_OPTIONS,
+                index=0 if client_gender == "女性" else 1,
                 label_visibility="collapsed",
                 key=f"lenormand_lady_role_{key_suffix}",
             )
             lady_custom = ""
             if lady_role == "その他":
-                lady_custom = st.text_input(
-                    "具体的に入力",
-                    placeholder="例：娘、姉",
-                    key=f"lenormand_lady_custom_{key_suffix}"
-                )
-
+                lady_custom = st.text_input("具体的に入力", placeholder="例：娘、姉", key=f"lenormand_lady_custom_{key_suffix}")
         with col_r:
             st.markdown("🎩 **紳士（28番）の役割**")
-            knight_default = 1 if client_gender == "女性" else 0
             knight_role = st.selectbox(
-                "",
-                options=ROLE_OPTIONS,
-                index=knight_default,
+                "", options=ROLE_OPTIONS,
+                index=1 if client_gender == "女性" else 0,
                 label_visibility="collapsed",
                 key=f"lenormand_knight_role_{key_suffix}",
             )
             knight_custom = ""
             if knight_role == "その他":
-                knight_custom = st.text_input(
-                    "具体的に入力",
-                    placeholder="例：息子、弟",
-                    key=f"lenormand_knight_custom_{key_suffix}"
-                )
-
+                knight_custom = st.text_input("具体的に入力", placeholder="例：息子、弟", key=f"lenormand_knight_custom_{key_suffix}")
         lady_desc = lady_custom if lady_role == "その他" and lady_custom else lady_role
         knight_desc = knight_custom if knight_role == "その他" and knight_custom else knight_role
         st.caption(f"📌 淑女＝{lady_desc}　／　紳士＝{knight_desc}　／　依頼者：{client_gender}")
-
     return {
         "client_gender": client_gender,
         "lady_role": lady_role,
@@ -318,6 +429,55 @@ def lenormand_person_setting_ui(key_suffix="main"):
         "knight_role": knight_role,
         "knight_custom": knight_custom,
     }
+
+# ─────────────────────────────────────────────
+# グラン・タブローグリッドUIコンポーネント
+# ─────────────────────────────────────────────
+def grand_tableau_grid_ui(key_suffix="main"):
+    """36枚のドロップダウングリッドUI。gridリスト（36要素）を返す。"""
+    st.markdown('<div class="section-label">✦ グラン・タブロー配置入力</div>', unsafe_allow_html=True)
+
+    with st.container(border=True):
+        st.caption("左上から右へ、1段目→2段目→3段目→4段目→最終行（中央4枚）の順に選択してください")
+
+        grid = []
+
+        # 1〜4段目（各8枚）
+        row_labels = ["1段目（最上段）", "2段目", "3段目", "4段目"]
+        for row_idx, label in enumerate(row_labels):
+            st.markdown(f"**{label}**")
+            cols = st.columns(8)
+            for col_idx, col in enumerate(cols):
+                with col:
+                    card = st.selectbox(
+                        f"{col_idx+1}",
+                        options=LENORMAND_CARDS,
+                        index=0,
+                        label_visibility="visible",
+                        key=f"gt_{key_suffix}_r{row_idx}_c{col_idx}",
+                    )
+                    grid.append(card)
+
+        # 最終行（4枚・中央寄せ）
+        st.markdown("**最終行（中央4枚）**")
+        _, c1, c2, c3, c4, _ = st.columns([2, 1, 1, 1, 1, 2])
+        final_cols = [c1, c2, c3, c4]
+        for i, col in enumerate(final_cols):
+            with col:
+                card = st.selectbox(
+                    f"{i+1}",
+                    options=LENORMAND_CARDS,
+                    index=0,
+                    label_visibility="visible",
+                    key=f"gt_{key_suffix}_r4_c{i}",
+                )
+                grid.append(card)
+
+        # 入力済み枚数を表示
+        filled = sum(1 for c in grid if c != "（未選択）")
+        st.caption(f"📌 入力済み：{filled} / 36枚")
+
+    return grid
 
 # ─────────────────────────────────────────────
 # 入力フォーム
@@ -353,6 +513,7 @@ consultation_text = st.text_area("", placeholder="クライアントから届い
 # 占術別UI
 # ─────────────────────────────────────────────
 person_setting = {}
+grand_tableau_grid = []
 
 if method_key == "astrodice":
     st.markdown('<div class="section-label">✦ アストロダイス</div>', unsafe_allow_html=True)
@@ -360,10 +521,8 @@ if method_key == "astrodice":
         st.markdown(f'<div class="dice-result">🎲 第{i+1}投｜{dice["label"] or "（ラベルなし）"}　→　{dice["planet"]} × {dice["sign"]} × {dice["house"]}</div>', unsafe_allow_html=True)
     if len(st.session_state.dice_sets) < 3:
         new_label = st.text_input(
-            "",
-            placeholder=f"第{len(st.session_state.dice_sets)+1}投のテーマ（例：現状、課題、アドバイス）",
-            label_visibility="collapsed",
-            key=f"dice_label_{len(st.session_state.dice_sets)}",
+            "", placeholder=f"第{len(st.session_state.dice_sets)+1}投のテーマ（例：現状、課題、アドバイス）",
+            label_visibility="collapsed", key=f"dice_label_{len(st.session_state.dice_sets)}",
         )
         if st.button(f"🎲 第{len(st.session_state.dice_sets)+1}投を振る"):
             st.session_state.dice_sets.append({
@@ -390,12 +549,16 @@ elif method_key == "astrology":
 
 elif method_key == "lenormand":
     person_setting = lenormand_person_setting_ui("main")
-    st.markdown('<div class="section-label">✦ 出目（任意）</div>', unsafe_allow_html=True)
-    raw_data = st.text_area("", placeholder="グラン・タブローの配置・カード名など", height=150, label_visibility="collapsed", key="raw_data")
+    grand_tableau_grid = grand_tableau_grid_ui("main")
+    # グリッドからraw_dataを自動生成（補足テキストエリアも残す）
+    raw_data = ""
+    st.markdown('<div class="section-label">✦ 補足・追記（任意）</div>', unsafe_allow_html=True)
+    raw_data_extra = st.text_area("", placeholder="グリッド以外の補足情報があれば", height=80, label_visibility="collapsed", key="raw_data_lenormand_extra")
 
 else:
     st.markdown('<div class="section-label">✦ 出目（任意）</div>', unsafe_allow_html=True)
     raw_data = st.text_area("", placeholder="カード名・星の配置・サイコロの出目など", height=150, label_visibility="collapsed", key="raw_data")
+    raw_data_extra = ""
 
 st.markdown('<div class="section-label">✦ 補足メモ（任意）</div>', unsafe_allow_html=True)
 memo = st.text_area("", placeholder="占い師の直感・クライアントの背景など", height=80, label_visibility="collapsed", key="memo")
@@ -433,8 +596,8 @@ if mode == "mashup":
         raw_data2 = st.text_area("", value=st.session_state.get("natal_result2", ""), placeholder="ネイタルチャートの情報を貼り付けてください", height=150, label_visibility="collapsed", key="raw_data2")
     elif method_key2 == "lenormand":
         person_setting = lenormand_person_setting_ui("mashup2")
-        st.markdown('<div class="section-label">✦ 占術２の生データ</div>', unsafe_allow_html=True)
-        raw_data2 = st.text_area("", placeholder="グラン・タブローの配置・カード名など", height=150, label_visibility="collapsed", key="raw_data2")
+        grand_tableau_grid = grand_tableau_grid_ui("mashup2")
+        raw_data2 = ""
     else:
         st.markdown('<div class="section-label">✦ 占術２の生データ</div>', unsafe_allow_html=True)
         raw_data2 = st.text_area("", placeholder="占術２の出目を貼り付けてください", height=150, label_visibility="collapsed", key="raw_data2")
@@ -461,15 +624,20 @@ else:
 if st.button(btn_label):
     if not client_name.strip():
         st.error("クライアント名を入力してください。")
-    elif not raw_data.strip() and mode == "rewrite":
-        st.error("リライトモードでは下書きを入力してください。")
-    elif mode == "mashup" and not raw_data2.strip():
-        st.error("占術２の生データを入力してください。")
     else:
         api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
         if not api_key:
             st.error("APIキーが設定されていません。")
         else:
+            # ルノルマンのグリッドからraw_dataを生成
+            if method_key == "lenormand" and grand_tableau_grid:
+                tableau_text = build_grand_tableau_text(grand_tableau_grid, person_setting)
+                extra = st.session_state.get("raw_data_lenormand_extra", "")
+                raw_data = tableau_text + ("\n\n【追記】\n" + extra if extra else "")
+            elif mode == "mashup" and method_key2 == "lenormand" and grand_tableau_grid:
+                tableau_text = build_grand_tableau_text(grand_tableau_grid, person_setting)
+                raw_data2 = tableau_text
+
             if mode == "mashup":
                 system_prompt = get_mashup_system_prompt(method_key, method_key2, person_setting if person_setting else None)
                 user_message = build_mashup_user_message(
@@ -505,7 +673,10 @@ if st.button(btn_label):
                 summary_parts.append(f"📌 相談ジャンル：{consultation}")
             if consultation_text:
                 summary_parts.append(f"💬 依頼文章：{consultation_text}")
-            if raw_data:
+            if grand_tableau_grid:
+                filled = sum(1 for c in grand_tableau_grid if c != "（未選択）")
+                summary_parts.append(f"🌹 グラン・タブロー：{filled}枚入力済み")
+            elif raw_data:
                 summary_parts.append(f"🎴 出目：{raw_data}")
             if memo:
                 summary_parts.append(f"📝 補足メモ：{memo}")
@@ -546,6 +717,6 @@ if st.button(btn_label):
 # ─────────────────────────────────────────────
 st.markdown("""
 <div style="text-align:center; margin-top:48px; padding-bottom:32px;">
-    <div style="font-size:11px; letter-spacing:3px; color:rgba(196,164,255,0.4);">🍡 ODANGO ENGINE v1.5 ✦ Private Use Only</div>
+    <div style="font-size:11px; letter-spacing:3px; color:rgba(196,164,255,0.4);">🍡 ODANGO ENGINE v1.6 ✦ Private Use Only</div>
 </div>
 """, unsafe_allow_html=True)
